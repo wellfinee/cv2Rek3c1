@@ -1,17 +1,30 @@
-const lenis = new Lenis({
-    duration: 1.15,
+const lenis = window.Lenis ? new window.Lenis({
+    duration: 1.2,
+    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     smoothWheel: true,
     smoothTouch: false,
-    wheelMultiplier: 1,
-    touchMultiplier: 1.5,
-});
+    wheelMultiplier: 0.9,
+    touchMultiplier: 1.35,
+}) : null;
 
-function raf(time) {
-    lenis.raf(time);
+let lenisVelocity = 0;
+
+if (lenis) {
+    lenis.on("scroll", ({ velocity }) => {
+        lenisVelocity = velocity || 0;
+
+        if (window.ScrollTrigger) {
+            ScrollTrigger.update();
+        }
+    });
+
+    const raf = (time) => {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+    };
+
     requestAnimationFrame(raf);
 }
-
-requestAnimationFrame(raf);
 
 
 if (window.gsap) {
@@ -600,21 +613,577 @@ const loadNews = async () => {
 
 loadNews();
 
-gsap.registerPlugin(SplitText, ScrollTrigger);
+const initStats = () => {
+    if (!window.gsap) {
+        return;
+    }
+
+    const stats = document.querySelector("[data-stats]");
+    const numbers = stats ? gsap.utils.toArray(stats.querySelectorAll("[data-stat-number]")) : [];
+
+    if (!stats || numbers.length === 0) {
+        return;
+    }
+
+    const counterState = numbers.map(() => ({
+        value: 0,
+    }));
+
+    const resetStats = () => {
+        gsap.killTweensOf([stats, ...numbers, ...counterState]);
+
+        numbers.forEach((number) => {
+            number.textContent = "0";
+        });
+
+        counterState.forEach((state) => {
+            state.value = 0;
+        });
+
+        gsap.set(stats, {
+            y: 36,
+            scale: 0.96,
+            opacity: 0,
+            filter: "blur(8px)",
+        });
+
+        gsap.set(numbers, {
+            y: 18,
+            opacity: 0,
+        });
+    };
+
+    const playStats = () => {
+        resetStats();
+
+        const timeline = gsap.timeline({
+            defaults: {
+                ease: "power3.out",
+            },
+        });
+
+        timeline
+            .to(stats, {
+                y: 0,
+                scale: 1,
+                opacity: 1,
+                filter: "blur(0px)",
+                duration: 0.54,
+            })
+            .to(numbers, {
+                y: 0,
+                opacity: 1,
+                duration: 0.38,
+                stagger: 0.08,
+            }, "-=0.32");
+
+        numbers.forEach((number, index) => {
+            const target = Number(number.dataset.target) || 0;
+            const state = counterState[index];
+
+            timeline.to(state, {
+                value: target,
+                duration: 0.78,
+                ease: "expo.out",
+                onUpdate: () => {
+                    number.textContent = Math.round(state.value).toLocaleString("ru-RU");
+                },
+                onComplete: () => {
+                    number.textContent = target.toLocaleString("ru-RU");
+                },
+            }, 0.18 + index * 0.08);
+        });
+    };
+
+    const hideStats = () => {
+        gsap.killTweensOf([stats, ...numbers, ...counterState]);
+
+        gsap.to(stats, {
+            y: -20,
+            scale: 0.98,
+            opacity: 0,
+            filter: "blur(6px)",
+            duration: 0.42,
+            ease: "power2.inOut",
+        });
+    };
+
+    resetStats();
+
+    if (window.ScrollTrigger) {
+        gsap.registerPlugin(window.ScrollTrigger);
+
+        window.ScrollTrigger.create({
+            trigger: stats,
+            start: "top 78%",
+            end: "bottom 18%",
+            onEnter: playStats,
+            onEnterBack: playStats,
+            onLeave: hideStats,
+            onLeaveBack: hideStats,
+        });
+
+        if (stats.getBoundingClientRect().top <= window.innerHeight * 0.78) {
+            playStats();
+        }
+    } else {
+        playStats();
+    }
+};
+
+initStats();
+
+const initLearning = () => {
+    if (!window.gsap) {
+        return;
+    }
+
+    const learning = document.querySelector("[data-learning]");
+
+    if (!learning) {
+        return;
+    }
+
+    const revealItems = gsap.utils.toArray(learning.querySelectorAll("[data-learning-reveal]"));
+    const cards = gsap.utils.toArray(learning.querySelectorAll("[data-learning-card]"));
+    const routePath = learning.querySelector("[data-learning-path]");
+    const routeDash = "5 18";
+
+    const getLearningTargets = () => [learning, ...revealItems, ...cards, routePath].filter(Boolean);
+
+    const resetLearning = () => {
+        gsap.killTweensOf(getLearningTargets());
+
+        gsap.set(learning, {
+            opacity: 1,
+        });
+
+        gsap.set(revealItems, {
+            y: 38,
+            opacity: 0,
+        });
+
+        gsap.set(cards, {
+            y: 62,
+            rotate: (index) => [-4, 3, -2, 2][index] || 0,
+            scale: 0.94,
+            opacity: 0,
+            filter: "blur(8px)",
+        });
+
+        if (routePath) {
+            gsap.set(routePath, {
+                opacity: 0,
+                strokeDasharray: routeDash,
+                strokeDashoffset: 130,
+            });
+        }
+    };
+
+    const playLearning = () => {
+        resetLearning();
+
+        const timeline = gsap.timeline({
+            defaults: {
+                ease: "power3.out",
+            },
+        });
+
+        timeline.to(revealItems, {
+            y: 0,
+            opacity: 1,
+            duration: 0.72,
+            stagger: 0.08,
+        });
+
+        if (routePath) {
+            timeline.to(routePath, {
+                opacity: 1,
+                strokeDashoffset: 0,
+                duration: 1.1,
+                ease: "power2.out",
+            }, "-=0.42");
+        }
+
+        timeline.to(cards, {
+            y: 0,
+            rotate: 0,
+            scale: 1,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.72,
+            stagger: 0.1,
+            ease: "back.out(1.28)",
+        }, routePath ? "-=0.78" : "-=0.32");
+    };
+
+    const hideLearning = () => {
+        gsap.killTweensOf(getLearningTargets());
+
+        gsap.to(revealItems, {
+            y: -22,
+            opacity: 0,
+            duration: 0.38,
+            stagger: {
+                each: 0.04,
+                from: "end",
+            },
+            ease: "power2.inOut",
+        });
+
+        gsap.to(cards, {
+            y: 30,
+            scale: 0.98,
+            opacity: 0,
+            filter: "blur(6px)",
+            duration: 0.44,
+            stagger: {
+                each: 0.05,
+                from: "end",
+            },
+            ease: "power2.inOut",
+        });
+
+        if (routePath) {
+            gsap.to(routePath, {
+                opacity: 0,
+                strokeDashoffset: -90,
+                duration: 0.5,
+                ease: "power2.inOut",
+            });
+        }
+    };
+
+    resetLearning();
+
+    if (window.ScrollTrigger) {
+        gsap.registerPlugin(window.ScrollTrigger);
+
+        window.ScrollTrigger.create({
+            trigger: learning,
+            start: "top 70%",
+            end: "bottom 16%",
+            onEnter: playLearning,
+            onEnterBack: playLearning,
+            onLeave: hideLearning,
+            onLeaveBack: hideLearning,
+        });
+
+        if (learning.getBoundingClientRect().top <= window.innerHeight * 0.7) {
+            playLearning();
+        }
+    } else {
+        playLearning();
+    }
+};
+
+initLearning();
+
+const initFitCheck = () => {
+    if (!window.gsap) {
+        return;
+    }
+
+    const fitCheck = document.querySelector("[data-fit-check]");
+
+    if (!fitCheck) {
+        return;
+    }
+
+    const revealItems = gsap.utils.toArray(fitCheck.querySelectorAll("[data-fit-reveal]"));
+    const cards = gsap.utils.toArray(fitCheck.querySelectorAll("[data-fit-card]"));
+    const routePath = fitCheck.querySelector("[data-fit-path]");
+    const routeDash = "4 18";
+
+    const getFitTargets = () => [fitCheck, ...revealItems, ...cards, routePath].filter(Boolean);
+
+    const resetFitCheck = () => {
+        gsap.killTweensOf(getFitTargets());
+
+        gsap.set(revealItems, {
+            y: 42,
+            opacity: 0,
+            filter: "blur(8px)",
+        });
+
+        gsap.set(cards, {
+            y: 74,
+            rotate: (index) => [-2.6, 2.2, -1.8, 1.4][index] || 0,
+            scale: 0.94,
+            opacity: 0,
+            filter: "blur(10px)",
+        });
+
+        if (routePath) {
+            gsap.set(routePath, {
+                opacity: 0,
+                strokeDasharray: routeDash,
+                strokeDashoffset: 170,
+            });
+        }
+    };
+
+    const playFitCheck = () => {
+        resetFitCheck();
+
+        const timeline = gsap.timeline({
+            defaults: {
+                ease: "power3.out",
+            },
+        });
+
+        timeline.to(revealItems, {
+            y: 0,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.82,
+            stagger: 0.09,
+        });
+
+        if (routePath) {
+            timeline.to(routePath, {
+                opacity: 1,
+                strokeDashoffset: 0,
+                duration: 1.18,
+                ease: "power2.out",
+            }, "-=0.5");
+        }
+
+        timeline.to(cards, {
+            y: 0,
+            rotate: 0,
+            scale: 1,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.82,
+            stagger: 0.11,
+            ease: "back.out(1.22)",
+        }, routePath ? "-=0.72" : "-=0.28");
+    };
+
+    const hideFitCheck = () => {
+        gsap.killTweensOf(getFitTargets());
+
+        gsap.to(revealItems, {
+            y: -26,
+            opacity: 0,
+            filter: "blur(7px)",
+            duration: 0.58,
+            stagger: {
+                each: 0.045,
+                from: "end",
+            },
+            ease: "power2.inOut",
+        });
+
+        gsap.to(cards, {
+            y: 38,
+            scale: 0.98,
+            opacity: 0,
+            filter: "blur(8px)",
+            duration: 0.62,
+            stagger: {
+                each: 0.055,
+                from: "end",
+            },
+            ease: "power2.inOut",
+        });
+
+        if (routePath) {
+            gsap.to(routePath, {
+                opacity: 0,
+                strokeDashoffset: -120,
+                duration: 0.64,
+                ease: "power2.inOut",
+            });
+        }
+    };
+
+    resetFitCheck();
+
+    if (window.ScrollTrigger) {
+        gsap.registerPlugin(window.ScrollTrigger);
+
+        window.ScrollTrigger.create({
+            trigger: fitCheck,
+            start: "top 72%",
+            end: "bottom 12%",
+            onEnter: playFitCheck,
+            onEnterBack: playFitCheck,
+            onLeave: hideFitCheck,
+            onLeaveBack: hideFitCheck,
+        });
+
+        if (fitCheck.getBoundingClientRect().top <= window.innerHeight * 0.72) {
+            playFitCheck();
+        }
+    } else {
+        playFitCheck();
+    }
+};
+
+initFitCheck();
+
+const initContacts = () => {
+    if (!window.gsap) {
+        return;
+    }
+
+    const contacts = document.querySelector("[data-contacts]");
+
+    if (!contacts) {
+        return;
+    }
+
+    const revealItems = gsap.utils.toArray(contacts.querySelectorAll("[data-contact-reveal]"));
+    const mapCard = contacts.querySelector("[data-contact-map]");
+    const cards = gsap.utils.toArray(contacts.querySelectorAll("[data-contact-card]"));
+
+    const getContactTargets = () => [contacts, ...revealItems, mapCard, ...cards].filter(Boolean);
+
+    const resetContacts = () => {
+        gsap.killTweensOf(getContactTargets());
+
+        gsap.set(revealItems, {
+            y: 34,
+            opacity: 0,
+            filter: "blur(7px)",
+        });
+
+        gsap.set(mapCard, {
+            y: 68,
+            rotate: -4,
+            scale: 0.96,
+            opacity: 0,
+            filter: "blur(10px)",
+        });
+
+        gsap.set(cards, {
+            x: 54,
+            y: 26,
+            rotate: (index) => [1.5, -1.2, 0.8][index] || 0,
+            opacity: 0,
+            filter: "blur(8px)",
+        });
+    };
+
+    const playContacts = () => {
+        resetContacts();
+
+        const timeline = gsap.timeline({
+            defaults: {
+                ease: "power3.out",
+            },
+        });
+
+        timeline.to(revealItems, {
+            y: 0,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.78,
+            stagger: 0.08,
+        });
+
+        timeline.to(mapCard, {
+            y: 0,
+            rotate: -0.8,
+            scale: 1,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.9,
+            ease: "back.out(1.16)",
+        }, "-=0.34");
+
+        timeline.to(cards, {
+            x: 0,
+            y: 0,
+            rotate: 0,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.74,
+            stagger: 0.09,
+            ease: "power3.out",
+        }, "-=0.58");
+    };
+
+    const hideContacts = () => {
+        gsap.killTweensOf(getContactTargets());
+
+        gsap.to(revealItems, {
+            y: -22,
+            opacity: 0,
+            filter: "blur(6px)",
+            duration: 0.5,
+            stagger: {
+                each: 0.04,
+                from: "end",
+            },
+            ease: "power2.inOut",
+        });
+
+        gsap.to(mapCard, {
+            y: 36,
+            rotate: -2.4,
+            scale: 0.98,
+            opacity: 0,
+            filter: "blur(7px)",
+            duration: 0.58,
+            ease: "power2.inOut",
+        });
+
+        gsap.to(cards, {
+            x: 26,
+            opacity: 0,
+            filter: "blur(7px)",
+            duration: 0.54,
+            stagger: {
+                each: 0.045,
+                from: "end",
+            },
+            ease: "power2.inOut",
+        });
+    };
+
+    resetContacts();
+
+    if (window.ScrollTrigger) {
+        gsap.registerPlugin(window.ScrollTrigger);
+
+        window.ScrollTrigger.create({
+            trigger: contacts,
+            start: "top 72%",
+            end: "bottom 10%",
+            onEnter: playContacts,
+            onEnterBack: playContacts,
+            onLeave: hideContacts,
+            onLeaveBack: hideContacts,
+        });
+
+        if (contacts.getBoundingClientRect().top <= window.innerHeight * 0.72) {
+            playContacts();
+        }
+    } else {
+        playContacts();
+    }
+};
+
+initContacts();
 
 const about = document.querySelector(".about");
 const aboutLabel = document.querySelector(".about__label");
 const aboutTitle = document.querySelector(".about__title");
 const aboutText = document.querySelector(".about__text");
 
-if (about && aboutLabel && aboutTitle && aboutText) {
-    const titleSplit = new SplitText(aboutTitle, {
+if (window.gsap && window.ScrollTrigger && window.SplitText && about && aboutLabel && aboutTitle && aboutText) {
+    gsap.registerPlugin(window.ScrollTrigger, window.SplitText);
+
+    const titleSplit = new window.SplitText(aboutTitle, {
         type: "lines, words",
         linesClass: "about__line",
         wordsClass: "about__word",
     });
 
-    const textSplit = new SplitText(aboutText, {
+    const textSplit = new window.SplitText(aboutText, {
         type: "lines",
         linesClass: "about__line",
     });
@@ -666,7 +1235,7 @@ if (about && aboutLabel && aboutTitle && aboutText) {
             stagger: 0.08,
         }, "-=0.45");
 
-    ScrollTrigger.create({
+    window.ScrollTrigger.create({
         trigger: about,
         start: "top 72%",
         end: "bottom 28%",
@@ -692,3 +1261,408 @@ if (about && aboutLabel && aboutTitle && aboutText) {
         },
     });
 }
+
+const initPhotoCarousel = () => {
+    if (!window.gsap) {
+        return;
+    }
+
+    const carousel = document.querySelector("[data-photo-carousel]");
+    const stage = carousel?.querySelector(".carousel__stage");
+    const path = carousel?.querySelector("[data-carousel-path]");
+    const string = carousel?.querySelector(".carousel__string");
+    const stringShadow = carousel?.querySelector(".carousel__string-shadow");
+    const headerItems = carousel ? gsap.utils.toArray(carousel.querySelectorAll(".carousel__eyebrow, .carousel__title")) : [];
+    const cards = gsap.utils.toArray(".carousel__card");
+
+    if (!carousel || !stage || !path || cards.length === 0) {
+        return;
+    }
+
+    let pathLength = path.getTotalLength();
+    let viewBox = path.ownerSVGElement.viewBox.baseVal;
+    let targetProgress = 0;
+    let currentProgress = 0;
+    let previousProgress = 0;
+    let springVelocity = 0;
+    let frame = null;
+    let activeKey = "";
+    let revealProgress = 0;
+    const revealState = {
+        value: 0,
+    };
+
+    const carouselClamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const visibleCount = Math.min(3, cards.length);
+    const revealEase = gsap.parseEase("power2.out");
+    const smoothStep = (value) => {
+        const clampedValue = carouselClamp(value, 0, 1);
+
+        return clampedValue * clampedValue * (3 - 2 * clampedValue);
+    };
+
+    const getCarouselProgress = () => {
+        const distance = carousel.offsetHeight - window.innerHeight;
+
+        if (distance <= 0) {
+            return 0;
+        }
+
+        const rawProgress = carouselClamp(-carousel.getBoundingClientRect().top / distance, 0, 1);
+        const softStartZone = 0.11;
+
+        return rawProgress * smoothStep(rawProgress / softStartZone);
+    };
+
+    const getCarouselRevealTarget = () => {
+        const rect = carousel.getBoundingClientRect();
+        const viewportHeight = window.innerHeight || 1;
+        const enter = (viewportHeight * 1.08 - rect.top) / (viewportHeight * 0.82);
+
+        return smoothStep(enter);
+    };
+
+    const renderCarouselReveal = (value) => {
+        const easedValue = revealEase(carouselClamp(value, 0, 1));
+        const hiddenOffset = 28 * (1 - easedValue);
+
+        revealState.value = value;
+
+        gsap.set(stage, {
+            y: hiddenOffset,
+            opacity: easedValue,
+            filter: `blur(${(1 - easedValue) * 3}px)`,
+        });
+
+        gsap.set(headerItems, {
+            y: 18 * (1 - easedValue),
+            rotate: -0.35 * (1 - easedValue),
+            opacity: easedValue,
+        });
+
+        gsap.set(path, {
+            opacity: easedValue,
+            strokeDashoffset: 150 * (1 - easedValue),
+        });
+
+        gsap.set(stringShadow, {
+            opacity: easedValue * 0.9,
+        });
+    };
+
+    const getActiveIndices = (progress) => {
+        const maxStartIndex = Math.max(cards.length - visibleCount, 0);
+        const stableProgress = progress <= 0.001 ? 0 : progress;
+        const rawIndex = stableProgress * (maxStartIndex + 1);
+        const startIndex = Math.min(Math.floor(rawIndex), maxStartIndex);
+        const localProgress = carouselClamp(rawIndex - startIndex, 0, 1);
+        const indices = Array.from({
+            length: visibleCount,
+        }, (_, slot) => startIndex + slot).filter((index) => index < cards.length);
+
+        return {
+            indices,
+            localProgress,
+        };
+    };
+
+    const setActiveCards = (indices) => {
+        const nextKey = indices.join("-");
+
+        if (nextKey === activeKey) {
+            return;
+        }
+
+        const activeSet = new Set(indices);
+
+        cards.forEach((card, index) => {
+            if (activeSet.has(index)) {
+                gsap.set(card, {
+                    visibility: "visible",
+                    pointerEvents: "auto",
+                });
+                return;
+            }
+
+            gsap.set(card, {
+                x: -9999,
+                visibility: "hidden",
+                opacity: 0,
+                pointerEvents: "none",
+            });
+        });
+
+        activeKey = nextKey;
+    };
+
+    const setCardPosition = (card, slot, globalIndex, localProgress, progress, physicsSpeed) => {
+        const stageWidth = stage.offsetWidth;
+        const stageHeight = stage.offsetHeight;
+        const pathProgress = carouselClamp(0.24 + (slot - localProgress) * 0.3, 0.08, 0.92);
+        const point = path.getPointAtLength(pathLength * pathProgress);
+        const nextPoint = path.getPointAtLength(pathLength * carouselClamp(pathProgress + 0.006, 0, 1));
+        const angle = Math.atan2(nextPoint.y - point.y, nextPoint.x - point.x) * 180 / Math.PI;
+        const centerDistance = Math.abs(pathProgress - 0.54);
+        const visiblePower = 1 - carouselClamp(centerDistance * 0.94, 0, 0.3);
+        const float = Math.sin(progress * Math.PI * 3.2 + globalIndex * 1.1) * 3.5;
+        const swing = carouselClamp(physicsSpeed * 20, -5, 5);
+        const cardTilt = angle * 0.07 + swing + Math.sin(progress * Math.PI * 2.2 + globalIndex) * 1.1;
+        const scale = 0.88 + visiblePower * 0.18;
+        const reveal = revealEase(revealState.value);
+        const outgoingFade = 1 - smoothStep(localProgress / 0.9);
+        const incomingFade = smoothStep((localProgress - 0.05) / 0.85);
+        const edgeFade = slot === 0
+            ? outgoingFade
+            : slot === visibleCount - 1
+                ? incomingFade
+                : 1;
+        const endSpaceShift = smoothStep((progress - 0.9) / 0.1) * stageWidth * 0.14;
+        const x = point.x / viewBox.width * stageWidth - endSpaceShift;
+        const y = point.y / viewBox.height * stageHeight + float + Math.sin(globalIndex * 2.1) * 3;
+        const baseOpacity = (0.5 + visiblePower * 0.5) * edgeFade;
+        const revealOffset = (1 - reveal) * (42 + slot * 10);
+        const revealTilt = (1 - reveal) * (slot - 1) * 3;
+
+        gsap.set(card, {
+            x,
+            y: y + revealOffset,
+            xPercent: -50,
+            yPercent: -50,
+            rotate: cardTilt + revealTilt,
+            rotationX: carouselClamp(-physicsSpeed * 16, -4, 4) + (1 - reveal) * 3,
+            rotationY: carouselClamp(physicsSpeed * 18, -5, 5),
+            scale: scale * (0.9 + reveal * 0.1),
+            opacity: baseOpacity * reveal,
+            zIndex: Math.round(visiblePower * 100),
+            filter: `blur(${(1 - reveal) * 2.5}px) saturate(${0.95 + visiblePower * 0.12}) brightness(${0.96 + visiblePower * 0.08})`,
+            "--card-tilt": `${cardTilt}deg`,
+            force3D: true,
+        });
+    };
+
+    const updateCarousel = () => {
+        targetProgress = getCarouselProgress();
+        revealProgress += (getCarouselRevealTarget() - revealProgress) * 0.035;
+
+        if (revealProgress < 0.002) {
+            revealProgress = 0;
+        } else if (revealProgress > 0.998) {
+            revealProgress = 1;
+        }
+
+        renderCarouselReveal(revealProgress);
+
+        const endEase = 1 - smoothStep((currentProgress - 0.88) / 0.12) * 0.28;
+        const force = (targetProgress - currentProgress) * 0.052 * endEase;
+        springVelocity = (springVelocity + force) * (0.78 - (1 - endEase) * 0.12);
+        currentProgress += springVelocity;
+
+        if (targetProgress >= 0.9995 && currentProgress >= 0.9992) {
+            currentProgress = 1;
+            springVelocity = 0;
+        } else if (targetProgress <= 0.002 && currentProgress <= 0.003) {
+            currentProgress = 0;
+            springVelocity = 0;
+        } else {
+            currentProgress = carouselClamp(currentProgress, 0, 1);
+        }
+
+        const progressDelta = currentProgress - previousProgress;
+        const lenisImpulse = carouselClamp(lenisVelocity * 0.006, -0.025, 0.025);
+        const motionRamp = smoothStep(currentProgress / 0.12) * smoothStep(revealState.value);
+        const physicsSpeed = (progressDelta * 14 + lenisImpulse) * motionRamp;
+
+        const active = getActiveIndices(currentProgress);
+
+        setActiveCards(active.indices);
+
+        active.indices.forEach((cardIndex, slot) => {
+            setCardPosition(cards[cardIndex], slot, cardIndex, active.localProgress, currentProgress, physicsSpeed);
+        });
+
+        previousProgress = currentProgress;
+        frame = requestAnimationFrame(updateCarousel);
+    };
+
+    const refreshCarousel = () => {
+        pathLength = path.getTotalLength();
+        viewBox = path.ownerSVGElement.viewBox.baseVal;
+    };
+
+    window.addEventListener("resize", refreshCarousel);
+    gsap.set(cards, {
+        x: -9999,
+        visibility: "hidden",
+        opacity: 0,
+        pointerEvents: "none",
+    });
+    gsap.set(string, {
+        transformOrigin: "50% 50%",
+    });
+    renderCarouselReveal(0);
+
+    refreshCarousel();
+    updateCarousel();
+
+    return () => {
+        if (frame) {
+            cancelAnimationFrame(frame);
+        }
+
+        window.removeEventListener("resize", refreshCarousel);
+    };
+};
+
+if (window.gsap) {
+    initPhotoCarousel();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    if (!window.gsap || !window.ScrollTrigger) {
+        return;
+    }
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    const footer = document.querySelector(".footer");
+    const footerInner = document.querySelector(".footer__inner");
+
+    if (!footer || !footerInner) {
+        return;
+    }
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduceMotion) {
+        gsap.set([
+            ".footer__inner",
+            ".footer__brand",
+            ".footer__column",
+            ".footer__contacts",
+            ".footer__bottom",
+            ".footer__line"
+        ], {
+            clearProps: "all"
+        });
+
+        return;
+    }
+
+    const footerTimeline = gsap.timeline({
+        paused: true,
+        defaults: {
+            ease: "power3.out"
+        }
+    });
+
+    footerTimeline
+        .fromTo(
+            footerInner,
+            {
+                y: 120,
+                scale: 0.96,
+                opacity: 0,
+                filter: "blur(14px)"
+            },
+            {
+                y: 0,
+                scale: 1,
+                opacity: 1,
+                filter: "blur(0px)",
+                duration: 1.05
+            }
+        )
+        .fromTo(
+            ".footer__brand",
+            {
+                x: -46,
+                opacity: 0
+            },
+            {
+                x: 0,
+                opacity: 1,
+                duration: 0.75
+            },
+            "-=0.62"
+        )
+        .fromTo(
+            ".footer__column",
+            {
+                y: 34,
+                opacity: 0
+            },
+            {
+                y: 0,
+                opacity: 1,
+                duration: 0.65,
+                stagger: 0.08
+            },
+            "-=0.55"
+        )
+        .fromTo(
+            ".footer__contacts",
+            {
+                x: 42,
+                opacity: 0
+            },
+            {
+                x: 0,
+                opacity: 1,
+                duration: 0.75
+            },
+            "-=0.55"
+        )
+        .fromTo(
+            ".footer__bottom",
+            {
+                y: 34,
+                opacity: 0
+            },
+            {
+                y: 0,
+                opacity: 1,
+                duration: 0.72
+            },
+            "-=0.42"
+        )
+        .fromTo(
+            ".footer__line",
+            {
+                opacity: 0,
+                scaleX: 0,
+                transformOrigin: "left center"
+            },
+            {
+                opacity: 1,
+                scaleX: 1,
+                duration: 0.9,
+                stagger: 0.12
+            },
+            "-=0.62"
+        );
+
+    ScrollTrigger.create({
+        trigger: footer,
+        start: "top 82%",
+        end: "bottom 12%",
+        animation: footerTimeline,
+        toggleActions: "play reverse play reverse",
+        invalidateOnRefresh: true
+    });
+
+    gsap.to(".footer__line--one", {
+        x: 26,
+        duration: 5,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut"
+    });
+
+    gsap.to(".footer__line--two", {
+        x: -22,
+        duration: 5.5,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut"
+    });
+});
